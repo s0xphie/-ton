@@ -1,0 +1,6 @@
+{
+  "name": "Muton Table Generator in Heart Esolang",
+  "description": "Unified 53/27/20/13-TET Muton macroset table generator outputting in Heart (قلب) esolang and custom delimited CSV.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
