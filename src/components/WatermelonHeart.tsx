@@ -3,12 +3,25 @@ import React, { useMemo } from "react";
 interface WatermelonHeartProps {
   className?: string;
   size?: number;
-  seed?: string; // deterministic seed
+  seed?: string; // optional external deterministic seed
 }
 
 // 53‑symbol alphabet
 const BASE53 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopq";
 
+// Convert timestamp → base53
+function timestampToBase53() {
+  const now = Date.now(); // ms precision
+  let n = now;
+  let out = "";
+  while (n > 0) {
+    out += BASE53[n % 53];
+    n = Math.floor(n / 53);
+  }
+  return out;
+}
+
+// Base53 PRNG
 function makeBase53PRNG(seed: string) {
   let state = 0;
   for (let i = 0; i < seed.length; i++) {
@@ -32,8 +45,15 @@ function makeBase53PRNG(seed: string) {
 export default function WatermelonHeart({
   className = "",
   size = 32,
-  seed = "BASE53_WATERMELON",
+  seed: externalSeed,
 }: WatermelonHeartProps) {
+
+  // ✔ Timestamp-based deterministic seed (generated once per mount)
+  const seed = useMemo(
+    () => externalSeed ?? timestampToBase53(),
+    [externalSeed]
+  );
+
   const { seeds, dither } = useMemo(() => {
     const rng = makeBase53PRNG(seed);
 
