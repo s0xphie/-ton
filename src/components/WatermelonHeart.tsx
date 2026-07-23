@@ -23,40 +23,49 @@ export default function WatermelonHeart({ className = "", size = 32 }: Watermelo
     return rects;
   }, []);
 
-  // Random seeds (position jitter + scale jitter)
   const seeds = useMemo(() => {
-    const baseSeeds = [
-      { x: 32, y: 28 },
-      { x: 68, y: 28 },
-      { x: 42, y: 42 },
-      { x: 58, y: 42 },
-      { x: 50, y: 56 },
-      { x: 33, y: 50 },
-      { x: 67, y: 50 },
-    ];
+  const baseSeeds = [
+    { x: 32, y: 28 },
+    { x: 68, y: 28 },
+    { x: 42, y: 42 },
+    { x: 58, y: 42 },
+    { x: 50, y: 56 },
+    { x: 33, y: 50 },
+    { x: 67, y: 50 },
+  ];
 
-    return baseSeeds.map((s, i) => {
-      const jitterX = (Math.random() - 0.5) * 4; // ±2px
-      const jitterY = (Math.random() - 0.5) * 4; // ±2px
-      const scale = 0.9 + Math.random() * 0.3; // 0.9–1.2
-      const rotate = (Math.random() - 0.5) * 20; // ±10°
+  return baseSeeds.map((s, i) => {
+    // jitter
+    let jitterX = (Math.random() - 0.5) * 4;
+    let jitterY = (Math.random() - 0.5) * 4;
 
-      const path = `M ${s.x},${s.y} C ${s.x - 2},${s.y - 4} ${s.x},${s.y - 7} ${s.x + 1},${s.y - 7} C ${s.x + 2},${s.y - 7} ${s.x + 4},${s.y - 4} ${s.x + 2},${s.y} Z`;
+    // enforce bounds so seeds stay inside red flesh
+    const minX = 28, maxX = 72;
+    const minY = 20, maxY = 70;
 
-      return (
-        <path
-          key={i}
-          d={path}
-          fill="#000"
-          transform={`
-            translate(${jitterX}, ${jitterY})
-            scale(${scale})
-            rotate(${rotate}, ${s.x}, ${s.y})
-          `}
-        />
-      );
-    });
-  }, []);
+    let finalX = Math.min(maxX, Math.max(minX, s.x + jitterX));
+    let finalY = Math.min(maxY, Math.max(minY, s.y + jitterY));
+
+    const scale = 0.9 + Math.random() * 0.3;
+    const rotate = (Math.random() - 0.5) * 20;
+
+    const path = `M ${finalX},${finalY} 
+      C ${finalX - 2},${finalY - 4} ${finalX},${finalY - 7} ${finalX + 1},${finalY - 7} 
+      C ${finalX + 2},${finalY - 7} ${finalX + 4},${finalY - 4} ${finalX + 2},${finalY} Z`;
+
+    return (
+      <path
+        key={i}
+        d={path}
+        fill="#000"
+        transform={`
+          scale(${scale})
+          rotate(${rotate}, ${finalX}, ${finalY})
+        `}
+      />
+    );
+  });
+}, []);
 
   return (
     <svg
