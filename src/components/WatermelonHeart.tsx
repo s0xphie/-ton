@@ -3,69 +3,124 @@ import React, { useMemo } from "react";
 interface WatermelonHeartProps {
   className?: string;
   size?: number;
+  seed?: string; // deterministic seed
 }
 
-export default function WatermelonHeart({ className = "", size = 32 }: WatermelonHeartProps) {
-  // Random dithering pattern (safe: raw SVG string)
-  const ditherPattern = useMemo(() => {
+// simple base53 charset (53 symbols)
+const BASE53_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopq";
+
+function makeBase53PRNG(seed: string) {
+  // hash seed into 32-bit int using base53
+  let state = 0;
+  for (let i = 0; i < seed.length; i++) {
+    const idx = BASE53_CHARS.indexOf(seed[i]);
+    const v = idx >= 0 ? idx : (seed.charCodeAt(i) % 53);
+    state = (state * 53 + v) >>> 0;
+  }
+  if (state === 0) state = 0x1234567;
+
+  return {
+    nextFloat() {
+      // LCG
+      state = (state * 1103515245 + 12345) & 0x7fffffff;
+      return state / 0x7fffffff;
+    },
+    nextRange(min: number, max: number) {
+      return min + (max - min) * this.nextFloat();
+    }
+  };
+}
+
+export default function WatermelonHeart({
+  className = "",
+  size = 32,
+  seed = "BASE53_WATERMELON",
+}: WatermelonHeartProps) {
+  const { seeds, ditherPattern } = useMemo(() => {
+    const rng = makeBase53PRNG(seed);
+
+    // base seed positions (inside red flesh)
+    const baseSeeds = [
+      { x: 32, y: 28 },
+      { x: 68, y: 28 },
+      { x: 42, y: 42 },
+      { x: 58, y: 42 },
+      { x: 50, y: 56 },
+      { x: 33, y: 50 },
+      { x: 67, y: 50 },
+    ];
+
+    // jittered, bounded seeds
+    const minX = 28, maxX = 72;
+    const minY = 20, maxY = 70;
+
+    const seeds = baseSeeds.map((s, i) => {
+      const jitterX = rng.nextRange(-2, 2);
+      const jitterY = rng.nextRange(-2, 2);
+
+      const finalX = Math.min(maxX, Math.max(minX, s.x + jitterX));
+      const finalY = Math.min(maxY, Math.max(minY, s.y + jitterY));
+
+      const scale = rng.nextRange(0.9, 1.2);
+      const rotate = rng.nextRange(-10, 10);
+
+      const path = `M ${finalX},${finalY}
+        C ${finalX - 2},${finalY - 4} ${finalX},${finalY - 7} ${finalX + 1},${finalY - 7}
+        C ${finalX + 2},${finalY - 7} ${finalX + 4},${finalY - 4} ${finalX + 2},${finalY} Z`;
+
+      return {
+        x: finalX,
+        y: finalY,
+        jsx: (
+          <path
+            key={i}
+            d={path}
+            fill="#000"
+            transform={`
+              scale(${scale})
+              rotate(${rotate}, ${finalX}, ${finalY})
+            `}
+          />
+        ),
+      };
+    });
+
+    // microtonal dithering tied to seed positions:
+    // each cell’s opacity level depends on distance to nearest seed
     let rects = "";
     const cell = 2;
 
     for (let y = 0; y < 4; y += cell) {
       for (let x = 0; x < 4; x += cell) {
-        const isBlack = Math.random() > 0.5;
-        const fill = isBlack ? "#000000" : "#ffffff";
-        const opacity = isBlack ? 0.18 : 0.12;
+        const cx = x + cell / 2;
+        const cy = y + cell / 2;
+
+        // compute min distance to any seed (in SVG space)
+        let minDist = Infinity;
+        for (const s of seeds) {
+          const dx = (cx / 4) * 100 - s.x;
+          const dy = (cy / 4) * 100 - s.y;
+          const d = Math.sqrt(dx * dx + dy * dy);
+          if (d < minDist) minDist = d;
+        }
+
+        // map distance to 4 microtonal "levels" (like 4 pitch classes)
+        const level = Math.min(3, Math.floor(minDist / 10)); // 0..3
+        const black = level % 2 === 0;
+        const baseOpacity = [0.22, 0.18, 0.14, 0.10][level];
+
+        // small deterministic modulation from PRNG (micro jitter)
+        const mod = rng.nextRange(-0.03, 0.03);
+        const opacity = Math.max(0, baseOpacity + mod);
+
+        const fill = black ? "#000000" : "#ffffff";
 
         rects += `<rect x="${x}" y="${y}" width="${cell}" height="${cell}" fill="${fill}" fill-opacity="${opacity}" />`;
       }
     }
-    return rects;
-  }, []);
 
-  const seeds = useMemo(() => {
-  const baseSeeds = [
-    { x: 32, y: 28 },
-    { x: 68, y: 28 },
-    { x: 42, y: 42 },
-    { x: 58, y: 42 },
-    { x: 50, y: 56 },
-    { x: 33, y: 50 },
-    { x: 67, y: 50 },
-  ];
-
-  return baseSeeds.map((s, i) => {
-    // jitter
-    let jitterX = (Math.random() - 0.5) * 4;
-    let jitterY = (Math.random() - 0.5) * 4;
-
-    // enforce bounds so seeds stay inside red flesh
-    const minX = 28, maxX = 72;
-    const minY = 20, maxY = 70;
-
-    let finalX = Math.min(maxX, Math.max(minX, s.x + jitterX));
-    let finalY = Math.min(maxY, Math.max(minY, s.y + jitterY));
-
-    const scale = 0.9 + Math.random() * 0.3;
-    const rotate = (Math.random() - 0.5) * 20;
-
-    const path = `M ${finalX},${finalY} 
-      C ${finalX - 2},${finalY - 4} ${finalX},${finalY - 7} ${finalX + 1},${finalY - 7} 
-      C ${finalX + 2},${finalY - 7} ${finalX + 4},${finalY - 4} ${finalX + 2},${finalY} Z`;
-
-    return (
-      <path
-        key={i}
-        d={path}
-        fill="#000"
-        transform={`
-          scale(${scale})
-          rotate(${rotate}, ${finalX}, ${finalY})
-        `}
-      />
-    );
-  });
-}, []);
+    return { seeds, ditherPattern: rects };
+  }, [seed]);
 
   return (
     <svg
@@ -129,8 +184,8 @@ export default function WatermelonHeart({ className = "", size = 32 }: Watermelo
           fill="url(#watermelonPulp)"
         />
 
-        {/* Randomized seeds */}
-        {seeds}
+        {/* deterministic, base53-driven seeds */}
+        {seeds.map(s => s.jsx)}
 
         <path
           d="M 50,88 C 20,65 5,45 5,28 C 5,14 16,5 30,5 C 40,5 47,11 50,17 C 53,11 60,5 70,5 C 84,5 95,14 95,28 C 95,45 80,65 50,88 Z"
