@@ -6,7 +6,7 @@ interface WatermelonHeartProps {
 }
 
 export default function WatermelonHeart({ className = "", size = 32 }: WatermelonHeartProps) {
-  // Generate random dithering pattern as a raw SVG string
+  // Random dithering pattern (safe: raw SVG string)
   const ditherPattern = useMemo(() => {
     let rects = "";
     const cell = 2;
@@ -20,8 +20,42 @@ export default function WatermelonHeart({ className = "", size = 32 }: Watermelo
         rects += `<rect x="${x}" y="${y}" width="${cell}" height="${cell}" fill="${fill}" fill-opacity="${opacity}" />`;
       }
     }
-
     return rects;
+  }, []);
+
+  // Random seeds (position jitter + scale jitter)
+  const seeds = useMemo(() => {
+    const baseSeeds = [
+      { x: 32, y: 28 },
+      { x: 68, y: 28 },
+      { x: 42, y: 42 },
+      { x: 58, y: 42 },
+      { x: 50, y: 56 },
+      { x: 33, y: 50 },
+      { x: 67, y: 50 },
+    ];
+
+    return baseSeeds.map((s, i) => {
+      const jitterX = (Math.random() - 0.5) * 4; // ±2px
+      const jitterY = (Math.random() - 0.5) * 4; // ±2px
+      const scale = 0.9 + Math.random() * 0.3; // 0.9–1.2
+      const rotate = (Math.random() - 0.5) * 20; // ±10°
+
+      const path = `M ${s.x},${s.y} C ${s.x - 2},${s.y - 4} ${s.x},${s.y - 7} ${s.x + 1},${s.y - 7} C ${s.x + 2},${s.y - 7} ${s.x + 4},${s.y - 4} ${s.x + 2},${s.y} Z`;
+
+      return (
+        <path
+          key={i}
+          d={path}
+          fill="#000"
+          transform={`
+            translate(${jitterX}, ${jitterY})
+            scale(${scale})
+            rotate(${rotate}, ${s.x}, ${s.y})
+          `}
+        />
+      );
+    });
   }, []);
 
   return (
@@ -44,7 +78,6 @@ export default function WatermelonHeart({ className = "", size = 32 }: Watermelo
           </feComponentTransfer>
         </filter>
 
-        {/* Inject raw SVG pattern safely */}
         <pattern
           id="bayerDither"
           width="4"
@@ -87,13 +120,8 @@ export default function WatermelonHeart({ className = "", size = 32 }: Watermelo
           fill="url(#watermelonPulp)"
         />
 
-        <path d="M 32,28 C 30,24 32,21 33,21 C 34,21 36,24 34,28 Z" fill="#000000" />
-        <path d="M 68,28 C 66,24 68,21 69,21 C 70,21 72,24 70,28 Z" fill="#000000" />
-        <path d="M 42,42 C 40,38 42,35 43,35 C 44,35 46,38 44,42 Z" fill="#000000" />
-        <path d="M 58,42 C 56,38 58,35 59,35 C 60,35 62,38 60,42 Z" fill="#000000" />
-        <path d="M 50,56 C 48,52 50,49 51,49 C 52,49 54,52 52,56 Z" fill="#000000" />
-        <path d="M 33,50 C 31,46 33,43 34,43 C 35,43 37,46 35,50 Z" fill="#000000" />
-        <path d="M 67,50 C 65,46 67,43 68,43 C 69,43 71,46 69,50 Z" fill="#000000" />
+        {/* Randomized seeds */}
+        {seeds}
 
         <path
           d="M 50,88 C 20,65 5,45 5,28 C 5,14 16,5 30,5 C 40,5 47,11 50,17 C 53,11 60,5 70,5 C 84,5 95,14 95,28 C 95,45 80,65 50,88 Z"
