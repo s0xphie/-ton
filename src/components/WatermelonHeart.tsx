@@ -6,26 +6,24 @@ interface WatermelonHeartProps {
   seed?: string; // deterministic seed
 }
 
-// simple base53 charset (53 symbols)
-const BASE53_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopq";
+// 53‑symbol alphabet
+const BASE53 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopq";
 
 function makeBase53PRNG(seed: string) {
-  // hash seed into 32-bit int using base53
   let state = 0;
   for (let i = 0; i < seed.length; i++) {
-    const idx = BASE53_CHARS.indexOf(seed[i]);
-    const v = idx >= 0 ? idx : (seed.charCodeAt(i) % 53);
+    const idx = BASE53.indexOf(seed[i]);
+    const v = idx >= 0 ? idx : seed.charCodeAt(i) % 53;
     state = (state * 53 + v) >>> 0;
   }
   if (state === 0) state = 0x1234567;
 
   return {
     nextFloat() {
-      // LCG
       state = (state * 1103515245 + 12345) & 0x7fffffff;
       return state / 0x7fffffff;
     },
-    nextRange(min: number, max: number) {
+    range(min: number, max: number) {
       return min + (max - min) * this.nextFloat();
     }
   };
@@ -36,10 +34,10 @@ export default function WatermelonHeart({
   size = 32,
   seed = "BASE53_WATERMELON",
 }: WatermelonHeartProps) {
-  const { seeds, ditherPattern } = useMemo(() => {
+  const { seeds, dither } = useMemo(() => {
     const rng = makeBase53PRNG(seed);
 
-    // base seed positions (inside red flesh)
+    // Base seed positions inside the red flesh
     const baseSeeds = [
       { x: 32, y: 28 },
       { x: 68, y: 28 },
@@ -50,27 +48,26 @@ export default function WatermelonHeart({
       { x: 67, y: 50 },
     ];
 
-    // jittered, bounded seeds
     const minX = 28, maxX = 72;
     const minY = 20, maxY = 70;
 
     const seeds = baseSeeds.map((s, i) => {
-      const jitterX = rng.nextRange(-2, 2);
-      const jitterY = rng.nextRange(-2, 2);
+      const jx = rng.range(-2, 2);
+      const jy = rng.range(-2, 2);
 
-      const finalX = Math.min(maxX, Math.max(minX, s.x + jitterX));
-      const finalY = Math.min(maxY, Math.max(minY, s.y + jitterY));
+      const x = Math.min(maxX, Math.max(minX, s.x + jx));
+      const y = Math.min(maxY, Math.max(minY, s.y + jy));
 
-      const scale = rng.nextRange(0.9, 1.2);
-      const rotate = rng.nextRange(-10, 10);
+      const scale = rng.range(0.9, 1.2);
+      const rot = rng.range(-10, 10);
 
-      const path = `M ${finalX},${finalY}
-        C ${finalX - 2},${finalY - 4} ${finalX},${finalY - 7} ${finalX + 1},${finalY - 7}
-        C ${finalX + 2},${finalY - 7} ${finalX + 4},${finalY - 4} ${finalX + 2},${finalY} Z`;
+      const path = `M ${x},${y}
+        C ${x - 2},${y - 4} ${x},${y - 7} ${x + 1},${y - 7}
+        C ${x + 2},${y - 7} ${x + 4},${y - 4} ${x + 2},${y} Z`;
 
       return {
-        x: finalX,
-        y: finalY,
+        x,
+        y,
         jsx: (
           <path
             key={i}
@@ -78,15 +75,14 @@ export default function WatermelonHeart({
             fill="#000"
             transform={`
               scale(${scale})
-              rotate(${rotate}, ${finalX}, ${finalY})
+              rotate(${rot}, ${x}, ${y})
             `}
           />
         ),
       };
     });
 
-    // microtonal dithering tied to seed positions:
-    // each cell’s opacity level depends on distance to nearest seed
+    // Microtonal dithering tied to seed positions
     let rects = "";
     const cell = 2;
 
@@ -95,31 +91,32 @@ export default function WatermelonHeart({
         const cx = x + cell / 2;
         const cy = y + cell / 2;
 
-        // compute min distance to any seed (in SVG space)
+        // Convert pattern coords → SVG coords
+        const px = (cx / 4) * 100;
+        const py = (cy / 4) * 100;
+
         let minDist = Infinity;
         for (const s of seeds) {
-          const dx = (cx / 4) * 100 - s.x;
-          const dy = (cy / 4) * 100 - s.y;
+          const dx = px - s.x;
+          const dy = py - s.y;
           const d = Math.sqrt(dx * dx + dy * dy);
           if (d < minDist) minDist = d;
         }
 
-        // map distance to 4 microtonal "levels" (like 4 pitch classes)
-        const level = Math.min(3, Math.floor(minDist / 10)); // 0..3
-        const black = level % 2 === 0;
+        // Microtonal 4‑level pitch class mapping
+        const level = Math.min(3, Math.floor(minDist / 10));
         const baseOpacity = [0.22, 0.18, 0.14, 0.10][level];
-
-        // small deterministic modulation from PRNG (micro jitter)
-        const mod = rng.nextRange(-0.03, 0.03);
+        const mod = rng.range(-0.03, 0.03);
         const opacity = Math.max(0, baseOpacity + mod);
 
+        const black = level % 2 === 0;
         const fill = black ? "#000000" : "#ffffff";
 
         rects += `<rect x="${x}" y="${y}" width="${cell}" height="${cell}" fill="${fill}" fill-opacity="${opacity}" />`;
       }
     }
 
-    return { seeds, ditherPattern: rects };
+    return { seeds, dither: rects };
   }, [seed]);
 
   return (
@@ -147,7 +144,7 @@ export default function WatermelonHeart({
           width="4"
           height="4"
           patternUnits="userSpaceOnUse"
-          dangerouslySetInnerHTML={{ __html: ditherPattern }}
+          dangerouslySetInnerHTML={{ __html: dither }}
         />
 
         <radialGradient id="watermelonPulp" cx="50%" cy="40%" r="60%">
@@ -184,7 +181,6 @@ export default function WatermelonHeart({
           fill="url(#watermelonPulp)"
         />
 
-        {/* deterministic, base53-driven seeds */}
         {seeds.map(s => s.jsx)}
 
         <path
